@@ -58,9 +58,9 @@ const ExamTaking = ({ currentExam, onSubmitExam, onCancel ,currentUser}) => {
                     <input
                       type="radio"
                       name={`question-${questionIndex}`}
-                      value={optionIndex + 1}
-                      checked={examAnswers[questionIndex] === optionIndex + 1}
-                      onChange={() => setExamAnswers(prev => ({ ...prev, [questionIndex]: optionIndex + 1 }))}
+                      value={optionIndex }
+                      checked={examAnswers[questionIndex] == optionIndex }
+                      onChange={() => setExamAnswers(prev => ({ ...prev, [questionIndex]: optionIndex  }))}
                       className="text-indigo-600"
                     />
                     <span>{option}</span>

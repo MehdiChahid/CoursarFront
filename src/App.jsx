@@ -20,6 +20,11 @@ const App = () => {
   const [users, setUsers] = useState([]);
   const [exams, setExams] = useState([]);
   const [results, setResults] = useState([]);
+  const [etudiantRaport, setEtudiantRaport] = useState(null);
+  useEffect(() => {
+    setActiveTab(null);
+  }, [etudiantRaport]);
+
   useEffect(() => {
     // Vérifie si l'utilisateur connecté est admin avant de fetch les users et les examens
     if (currentUser && currentUser.role === "admin") {
@@ -56,16 +61,11 @@ const App = () => {
       fetchUsers();
     }
 
-
-
-
     const fetchExams = async () => {
       if (currentUser && currentUser.role == "etudiant") {
         fetch("http://localhost:8080/api/exams")
           .then((res) => res.json())
-          .then((data) =>
-            setExams(data)
-          )
+          .then((data) => setExams(data))
           .catch(() => setExams([]));
       } else {
         fetch("http://localhost:8080/api/exams")
@@ -80,11 +80,12 @@ const App = () => {
     const fetchResults = async () => {
       if (currentUser && currentUser.role == "etudiant") {
         try {
-          const response = await fetch(`http://localhost:8080/api/results/etudiant/${currentUser.id}`);
+          const response = await fetch(
+            `http://localhost:8080/api/results/etudiant/${currentUser.id}`
+          );
           if (response.ok) {
             const data = await response.json();
-      
-            
+
             setResults(data || []);
           } else {
             setResults([]);
@@ -98,8 +99,6 @@ const App = () => {
     fetchExams();
     fetchResults();
   }, [currentUser]);
-  
-
 
   const [currentExam, setCurrentExam] = useState(null);
 
@@ -137,8 +136,8 @@ const App = () => {
   const handleSubmitExam = (examData) => {
     const result = {
       id: Date.now(),
-      exam: {id:currentExam.id},
-      etudiant: {id:currentUser.id},
+      exam: { id: currentExam.id },
+      etudiant: { id: currentUser.id },
       answers: examData.answers,
       score: examData.score,
       date_passage: new Date().toISOString(),
@@ -173,7 +172,11 @@ const App = () => {
         )}
 
         {activeTab === "users" && currentUser.role === "admin" && (
-          <UserManagement setActiveTab={setActiveTab} users={users} onAddUser={handleAddUser} />
+          <UserManagement
+            setEtudiantRaport={setEtudiantRaport}
+            users={users}
+            onAddUser={handleAddUser}
+          />
         )}
 
         {activeTab === "exams" && currentUser.role === "formateur" && (
@@ -200,7 +203,6 @@ const App = () => {
             onSubmitExam={handleSubmitExam}
             onCancel={handleCancelExam}
             currentUser={currentUser}
-
           />
         )}
 
@@ -212,13 +214,9 @@ const App = () => {
           />
         )}
 
-         {activeTab == "rapport" && (
-          <Rapport
-            results={results}
-            exams={exams}
-            currentUser={currentUser}
-          />
-        )}
+        {(activeTab == null && etudiantRaport) && (
+            <Rapport id_etudiant={etudiantRaport} currentUser={currentUser} />
+          )}
       </div>
     </div>
   );

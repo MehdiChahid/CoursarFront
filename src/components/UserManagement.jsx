@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Plus } from 'lucide-react';
 
-const UserManagement = ({ users, onAddUser ,setActiveTab }) => {
+const UserManagement = ({ users, onAddUser ,setEtudiantRaport }) => {
   const [newUser, setNewUser] = useState({ email: '', password: '', role: 'etudiant', name: '' });
 
   const handleAddUser = async () => {
@@ -102,7 +102,7 @@ const UserManagement = ({ users, onAddUser ,setActiveTab }) => {
                   <td className="py-3">
                     {user.role === 'etudiant' && (
                       <button
-                        onClick={() => setActiveTab("rapport")}
+                        onClick={() => setEtudiantRaport(user.id)}
                         className="bg-indigo-500 text-white px-3 py-1 rounded hover:bg-indigo-600 text-xs" >
                         Voir rapport
                       </button>

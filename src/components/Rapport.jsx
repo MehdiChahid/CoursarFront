@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { 
   BarChart3, 
   TrendingUp, 
@@ -170,41 +170,69 @@ const StatCard = ({ title, value, icon: Icon, color, trend, trendValue }) => {
   );
 };
 
-export default function Rapport({ results = [], exams = [], currentUser }) {
-  console.log("results", results);
-  console.log("exams", exams);
-  console.log(currentUser);
+export default function Rapport({ currentUser, id_etudiant }) {
+  const [results, setResults] = useState([]);
 
-  // Traitement des vraies données
+  useEffect(() => {
+    const fetchResults = async () => {
+      if (id_etudiant) {
+        try {
+          const response = await fetch(`http://localhost:8080/api/results/etudiant/${id_etudiant}`);
+          if (response.ok) {
+            const data = await response.json();
+            setResults(data || []);
+          } else {
+            setResults([]);
+          }
+        } catch (error) {
+          setResults([]);
+        }
+      }
+    };
+
+    fetchResults();
+  }, [id_etudiant, currentUser]);
+
+  console.log('Results:', results);
+
+  // Traitement des vraies données basé sur results
   const processedData = useMemo(() => {
-    // Extraire tous les résultats de tous les examens
-    const allResults = [];
-    exams.forEach(exam => {
-      if (exam.results && exam.results.length > 0) {
-        exam.results.forEach(result => {
-          allResults.push({
-            ...result,
-            examId: exam.id,
-            examTitle: exam.title,
-            formateur: exam.formateur,
-            questionsCount: exam.questions ? exam.questions.length : 0
-          });
-        });
+    if (!results || results.length === 0) {
+      return {
+        totalExams: 0,
+        totalResults: 0,
+        totalParticipants: 0,
+        averageScore: 0,
+        successRate: 0,
+        examScores: [],
+        gradeDistribution: [],
+        recentActivity: [],
+        difficultExams: [],
+        allResults: []
+      };
+    }
+
+    // Extraire les examens uniques depuis les résultats
+    const uniqueExams = new Map();
+    results.forEach(result => {
+      if (result.exam && !uniqueExams.has(result.exam.id)) {
+        uniqueExams.set(result.exam.id, result.exam);
       }
     });
+    const exams = Array.from(uniqueExams.values());
 
     // Statistiques générales
     const totalExams = exams.length;
-    const totalResults = allResults.length;
-    const totalParticipants = new Set(allResults.map(r => r.etudiantId)).size || allResults.length;
+    const totalResults = results.length;
+    const totalParticipants = new Set(results.map(r => r.etudiant?.id || r.id)).size;
     
-    const averageScore = allResults.length > 0 
-      ? allResults.reduce((sum, result) => sum + (result.score || 0), 0) / allResults.length 
+    const averageScore = results.length > 0 
+      ? results.reduce((sum, result) => sum + (result.score || 0), 0) / results.length 
       : 0;
 
     // Scores par examen
     const examScores = exams.map(exam => {
-      const examResults = allResults.filter(result => result.examId === exam.id);
+      const examResults = results.filter(result => result.exam?.id === exam.id);
       const avgScore = examResults.length > 0 
         ? examResults.reduce((sum, result) => sum + (result.score || 0), 0) / examResults.length 
         : 0;
@@ -219,37 +247,37 @@ export default function Rapport({ results = [], exams = [], currentUser }) {
     const gradeDistribution = [
       { 
         label: 'Excellent (90-100%)', 
-        value: allResults.filter(r => r.score >= 90).length 
+        value: results.filter(r => r.score >= 90).length 
       },
       { 
         label: 'Bien (70-89%)', 
-        value: allResults.filter(r => r.score >= 70 && r.score < 90).length 
+        value: results.filter(r => r.score >= 70 && r.score < 90).length 
       },
       { 
         label: 'Passable (50-69%)', 
-        value: allResults.filter(r => r.score >= 50 && r.score < 70).length 
+        value: results.filter(r => r.score >= 50 && r.score < 70).length 
       },
       { 
         label: 'Échec (0-49%)', 
-        value: allResults.filter(r => r.score < 50).length 
+        value: results.filter(r => r.score < 50).length 
       }
     ];
 
     // Taux de réussite réel
-    const successRate = allResults.length > 0 
-      ? (allResults.filter(r => r.score >= 50).length / allResults.length) * 100 
+    const successRate = results.length > 0 
+      ? (results.filter(r => r.score >= 50).length / results.length) * 100 
       : 0;
 
     // Activité par date
     const activityByDate = {};
-    allResults.forEach(result => {
+    results.forEach(result => {
       if (result.datePassage) {
         const date = result.datePassage.split('T')[0];
         if (!activityByDate[date]) {
           activityByDate[date] = { results: 0, participants: new Set() };
         }
         activityByDate[date].results++;
-        activityByDate[date].participants.add(result.etudiantId || result.id);
+        activityByDate[date].participants.add(result.etudiant?.id || result.id);
       }
     });
 
@@ -268,6 +296,15 @@ export default function Rapport({ results = [], exams = [], currentUser }) {
       .sort((a, b) => a.value - b.value)
       .slice(0, 5);
 
+    // Transformer les résultats pour l'affichage
+    const allResults = results.map(result => ({
+      ...result,
+      examId: result.exam?.id,
+      examTitle: result.exam?.title,
+      formateur: result.exam?.formateur,
+      questionsCount: result.exam?.questions ? result.exam.questions.length : 0
+    }));
+
     return {
       totalExams,
       totalResults,
@@ -280,17 +317,17 @@ export default function Rapport({ results = [], exams = [], currentUser }) {
       difficultExams,
       allResults
     };
-  }, [results, exams]);
+  }, [results]);
 
   // Si pas de données
-  if (exams.length === 0) {
+  if (results.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
         <div className="max-w-7xl mx-auto">
           <div className="text-center py-12">
             <AlertCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-gray-600 mb-2">Aucun examen disponible</h2>
-            <p className="text-gray-500">Créez des examens pour voir les rapports et statistiques.</p>
+            <h2 className="text-2xl font-bold text-gray-600 mb-2">Aucun résultat disponible</h2>
+            <p className="text-gray-500">Passez des examens pour voir vos rapports et statistiques.</p>
           </div>
         </div>
       </div>
@@ -305,10 +342,10 @@ export default function Rapport({ results = [], exams = [], currentUser }) {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-800 mb-2">
-                📊 Tableau de Bord - Rapports
+                📊 Mes Résultats - Tableau de Bord
               </h1>
               <p className="text-gray-600">
-                Analyse des performances et statistiques des examens
+                Analyse de vos performances et statistiques personnelles
               </p>
             </div>
             <button className="flex items-center bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors">
@@ -321,15 +358,15 @@ export default function Rapport({ results = [], exams = [], currentUser }) {
         {/* Cartes de statistiques */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <StatCard
-            title="Total Examens"
-            value={processedData.totalExams}
+            title="Examens Passés"
+            value={processedData.totalResults}
             icon={FileText}
             color="bg-blue-500"
           />
           <StatCard
-            title="Participants"
-            value={processedData.totalParticipants}
-            icon={Users}
+            title="Examens Différents"
+            value={processedData.totalExams}
+            icon={Award}
             color="bg-green-500"
           />
           <StatCard
@@ -350,21 +387,21 @@ export default function Rapport({ results = [], exams = [], currentUser }) {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <BarChart
             data={processedData.examScores}
-            title="Scores Moyens par Examen"
+            title="Mes Scores par Examen"
           />
           <DonutChart
             data={processedData.gradeDistribution}
-            title="Répartition des Notes"
+            title="Répartition de Mes Notes"
           />
         </div>
 
         {/* Graphiques secondaires */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* Activité récente */}
+          {/* Mon activité récente */}
           <div className="bg-white p-6 rounded-xl shadow-sm">
             <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
               <Activity className="w-5 h-5 mr-2 text-indigo-600" />
-              Activité Récente
+              Mon Activité Récente
             </h3>
             {processedData.recentActivity.length > 0 ? (
               <div className="space-y-3">
@@ -372,7 +409,7 @@ export default function Rapport({ results = [], exams = [], currentUser }) {
                   <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <div>
                       <div className="text-sm font-medium text-gray-800">
-                        {activity.results} résultat{activity.results > 1 ? 's' : ''}
+                        {activity.results} examen{activity.results > 1 ? 's passés' : ' passé'}
                       </div>
                       <div className="text-xs text-gray-500">
                         {new Date(activity.date).toLocaleDateString('fr-FR')}
@@ -380,9 +417,9 @@ export default function Rapport({ results = [], exams = [], currentUser }) {
                     </div>
                     <div className="text-right">
                       <div className="text-sm font-semibold text-indigo-600">
-                        {activity.participants}
+                        {activity.results}
                       </div>
-                      <div className="text-xs text-gray-500">participant{activity.participants > 1 ? 's' : ''}</div>
+                      <div className="text-xs text-gray-500">tentative{activity.results > 1 ? 's' : ''}</div>
                     </div>
                   </div>
                 ))}
@@ -395,11 +432,11 @@ export default function Rapport({ results = [], exams = [], currentUser }) {
             )}
           </div>
 
-          {/* Examens les plus difficiles */}
+          {/* Mes examens les plus difficiles */}
           <div className="bg-white p-6 rounded-xl shadow-sm">
             <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
               <Target className="w-5 h-5 mr-2 text-red-600" />
-              Examens les Plus Difficiles
+              Mes Examens les Plus Difficiles
             </h3>
             {processedData.difficultExams.length > 0 ? (
               <div className="space-y-3">
@@ -414,7 +451,7 @@ export default function Rapport({ results = [], exams = [], currentUser }) {
                           {exam.label}
                         </div>
                         <div className="text-xs text-gray-500">
-                          {exam.participantsCount} participant{exam.participantsCount > 1 ? 's' : ''}
+                          {exam.participantsCount} tentative{exam.participantsCount > 1 ? 's' : ''}
                         </div>
                       </div>
                     </div>
@@ -433,12 +470,12 @@ export default function Rapport({ results = [], exams = [], currentUser }) {
           </div>
         </div>
 
-        {/* Tableau détaillé */}
+        {/* Tableau détaillé de mes résultats */}
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
           <div className="p-6 border-b border-gray-200">
             <h3 className="text-lg font-semibold text-gray-800 flex items-center">
               <Calendar className="w-5 h-5 mr-2 text-indigo-600" />
-              Détails des Résultats ({processedData.allResults.length})
+              Historique Détaillé de Mes Résultats ({processedData.allResults.length})
             </h3>
           </div>
           <div className="overflow-x-auto">
@@ -452,7 +489,7 @@ export default function Rapport({ results = [], exams = [], currentUser }) {
                     Date
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Score
+                    Mon Score
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Statut
@@ -484,7 +521,7 @@ export default function Rapport({ results = [], exams = [], currentUser }) {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-semibold text-gray-900">
-                          {result.score}%
+                          {result.score.toFixed(1)}%
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -516,4 +553,4 @@ export default function Rapport({ results = [], exams = [], currentUser }) {
       </div>
     </div>
   );
-}
+} 
